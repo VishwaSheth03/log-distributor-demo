@@ -1,0 +1,25 @@
+services:
+  distributor:
+    build: ./distributor
+    container_name: distributor
+    ports:
+      - "8000:8000"      # host:container
+    restart: on-failure
+
+  analyzer1:
+    build: ./analyzers
+    container_name: analyzer1
+    environment:
+      - PORT=9000
+    expose:
+      - "9000"           # only inside network
+    restart: on-failure
+
+  emitter1:
+    build: ./emitters
+    container_name: emitter1
+    environment:
+      - DISTRIBUTOR_URL=http://distributor:8000/log-packet
+    depends_on:
+      - distributor
+    restart: on-failure

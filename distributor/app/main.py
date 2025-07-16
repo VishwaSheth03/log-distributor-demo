@@ -26,8 +26,8 @@ async def _startup():
     async def worker():
         """Dummy consumer pulls packets forever."""
         while True:
-            pkt = await PACKET_QUEUE.get()
-            logging.info("Distributor popped packet %s", pkt.get("packetId"))
+            packet = await PACKET_QUEUE.get()
+            logging.info("Distributor received packet, packetId=%s", packet.get("packetId"))
             await asyncio.sleep(0.01)     # simulate work
 
     # Spin up 2 workers for demo

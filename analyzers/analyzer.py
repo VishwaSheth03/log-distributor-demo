@@ -10,6 +10,10 @@ async def ingest(packet: dict):
     # minimal ACK
     return JSONResponse({"status": "ok"})
 
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok"})
+
 def _graceful(sig, _frame):
     logging.warning("Analyzer shutting down")
     sys.exit(0)

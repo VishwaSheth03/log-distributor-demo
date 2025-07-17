@@ -2,23 +2,25 @@
 Minimal log‑emitter: sends one packet per second forever
 CLI flags will come later.
 """
-import httpx, asyncio, uuid, datetime, signal, sys
+import os, httpx, asyncio, uuid, datetime, signal, sys
 
-DISTRIBUTOR_URL = "http://distributor:8000/log-packet"  # changes in Compose
-REQUEST_INTERVAL = 1.0
+DISTRIBUTOR_URL = os.getenv("DISTRIBUTOR_URL", "http://distributor:8000/log-packet")
+RATE_RPS = float(os.getenv("RATE_RPS", "1.0"))
+
+INTERVAL = 1.0 / RATE_RPS if RATE_RPS > 0 else 1.0
 
 async def main():
     async with httpx.AsyncClient() as client:
         while True:
             packet = {
                 "packetId": str(uuid.uuid4()),
-                "emitter": "emitter-1",
+                "emitter": "emitter-svc",
                 "messages": [
                     {
-                        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+                        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                         "level": "INFO",
                         "service": "demo",
-                        "host": "emitter-1",
+                        "host": "emitter-svc",
                         "msg": "hello"
                     }
                 ]
@@ -28,7 +30,7 @@ async def main():
                 print("sent", packet["packetId"], r.status_code)
             except Exception as e:
                 print("send failed:", e)
-            await asyncio.sleep(REQUEST_INTERVAL)
+            await asyncio.sleep(INTERVAL)
 
 def _graceful(sig, _frame):
     print(f"\nReceived {sig!s}, exiting")
@@ -39,4 +41,3 @@ signal.signal(signal.SIGTERM, _graceful)
 
 if __name__ == "__main__":
     asyncio.run(main())
-    

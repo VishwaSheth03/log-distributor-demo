@@ -1,25 +1,26 @@
 services:
   distributor:
     build: ./distributor
-    container_name: distributor
-    ports:
-      - "8000:8000"      # host:container
-    restart: on-failure
+    environment:
+      - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.7},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.3}]
+    ports: ["8000:8000"]
 
   analyzer1:
     build: ./analyzers
-    container_name: analyzer1
-    environment:
-      - PORT=9000
-    expose:
-      - "9000"           # only inside network
-    restart: on-failure
+    expose: ["9000"]
+
+  analyzer2:
+    build: ./analyzers
+    expose: ["9000"]
 
   emitter1:
     build: ./emitters
-    container_name: emitter1
     environment:
       - DISTRIBUTOR_URL=http://distributor:8000/log-packet
-    depends_on:
-      - distributor
-    restart: on-failure
+      - RATE_RPS=4
+
+  emitter2:
+    build: ./emitters
+    environment:
+      - DISTRIBUTOR_URL=http://distributor:8000/log-packet
+      - RATE_RPS=2

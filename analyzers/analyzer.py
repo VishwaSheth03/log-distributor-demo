@@ -7,7 +7,7 @@ app = FastAPI(title="Analyzer MVP")
 
 @app.post("/ingest")
 async def ingest(packet: dict):
-    # minimal ACK
+    # minimal ACK, we are NOT storing or processing the packet
     return JSONResponse({"status": "ok"})
 
 @app.get("/health")

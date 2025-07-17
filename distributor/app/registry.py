@@ -9,6 +9,7 @@ class Analyzer(BaseModel):
     current_weight: float = 0.0
     effective_weight: float = 0.0
     healthy: bool = True
+    admin_enabled: bool = True
     failures: int = 0
     last_check: float = 0.0
 
@@ -17,14 +18,35 @@ class AnalyzerRegistry:
         self.analyzers = analyzers
         self.max_fail = max_fail
         self._lock = asyncio.Lock()
+        self._normalize_effective_weights()
+
+    # gets an analyzer by ID
+    def _by_id(self, aid: str) -> Analyzer:
+        return next(x for x in self.analyzers if x.id == aid)
     
+    # checks if an analyzer is healthy and eligible for routing
+    def _eligible(self, a: Analyzer) -> bool:
+        return a.healthy and a.admin_enabled and a.effective_weight > 0
+    
+    # normalizes effective weights based on current weights and total weight
+    def _normalize_effective_weights(self):
+        healthy = [a for a in self.analyzers if a.healthy and a.admin_enabled]
+        total = sum(a.weight for a in healthy)
+        for a in self.analyzers:
+            a.effective_weight = (
+                a.weight / total
+                if (a in healthy and total > 0)
+                else 0.0
+            )
+
+
     # Routing helper -- this is a weighted round-robin
     async def choose(self) -> Analyzer | None:
         async with self._lock:
-            total = 0.0
             best = None
+            total = 0.0
             for a in self.analyzers:
-                if not a.healthy:
+                if not self._eligible(a):
                     continue
                 a.current_weight += a.effective_weight
                 total += a.effective_weight
@@ -32,24 +54,51 @@ class AnalyzerRegistry:
                     best = a
             if best:
                 best.current_weight -= total
-                best.last_check = time.time()
             return best
     
     # Health management
     async def mark_failure(self, aid: str):
         async with self._lock:
-            a = next(x for x in self.analyzers if x.id == aid)
+            a = self._by_id(aid)
             a.failures += 1
-            if a.failures >= self.max_fail:
+            if a.failures >= self.max_fail and a.healthy:
                 a.healthy = False
-                a.effective_weight = 0.0
-                logging.warning("Analyzer %s marked UNHEALTHY after %d failures", a.id, a.failures)
+                a.current_weight = 0.0
+                logging.warning("Analyzer %s marked UNHEALTHY after %d failures", aid, a.failures)
+                logging.info("Effective weight for %s set to 0.0", aid)
+                self._normalize_effective_weights()
     
     async def mark_success(self, aid: str):
         async with self._lock:
-            a = next(x for x in self.analyzers if x.id == aid)
+            a = self._by_id(aid)
             a.failures = 0
             if not a.healthy:
-                a.healthy = True
-                a.effective_weight = a.weight
                 logging.info("Analyzer %s marked HEALTHY", aid)
+                a.current_weight = 0.0
+            a.healthy = True
+            a.effective_weight = a.weight
+            self._normalize_effective_weights()
+    
+    async def toggle_admin(self, aid: str, enable: bool):
+        async with self._lock:
+            a = self._by_id(aid)
+            if a.admin_enabled != enable:
+                a.admin_enabled = enable
+                a.current_weight = 0.0
+                logging.info("Analyzer %s admin status changed to %s", aid, "ENABLED" if enable else "DISABLED")
+                self._normalize_effective_weights()
+    
+    async def add(self, a: Analyzer):
+        async with self._lock:
+            if a.id in [x.id for x in self.analyzers]:
+                raise ValueError(f"Analyzer with ID {a.id} already exists")
+            self.analyzers.append(a)
+            logging.info("Added new analyzer %s", a.id)
+            self._normalize_effective_weights()
+    
+    async def remove(self, aid: str):
+        async with self._lock:
+            a = self._by_id(aid)
+            self.analyzers.remove(a)
+            logging.info("Removed analyzer %s", aid)
+            self._normalize_effective_weights()

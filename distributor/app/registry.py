@@ -5,7 +5,7 @@ import asyncio, logging, time
 class Analyzer(BaseModel):
     id: str
     url: str
-    weight: float
+    weight: float = 1.0
     current_weight: float = 0.0
     effective_weight: float = 0.0
     healthy: bool = True
@@ -30,14 +30,31 @@ class AnalyzerRegistry:
     
     # normalizes effective weights based on current weights and total weight
     def _normalize_effective_weights(self):
-        healthy = [a for a in self.analyzers if a.healthy and a.admin_enabled]
-        total = sum(a.weight for a in healthy)
+        """
+        Rule:
+        - If there are N eligible analyzers (healthy AND admin‑enabled),
+          split the combined lost weight *equally* among them.
+        - Sum of all effective weights must stay 1.0 (or 0 if none eligible).
+        """
+        eligible = [a for a in self.analyzers if a.healthy and a.admin_enabled]
+
+        if not eligible:
+            for a in self.analyzers:
+                a.effective_weight = 0.0
+            return
+
+        # Step 1 – base weights from config (only for eligible ones)
+        base_total = sum(a.weight for a in eligible)
+        lost_weight = max(0.0, 1.0 - base_total)          # any gap because others are down
+
+        # Step 2 – even share of lost weight
+        even_share = lost_weight / len(eligible)
+
         for a in self.analyzers:
-            a.effective_weight = (
-                a.weight / total
-                if (a in healthy and total > 0)
-                else 0.0
-            )
+            if a in eligible:
+                a.effective_weight = a.weight + even_share
+            else:
+                a.effective_weight = 0.0
 
 
     # Routing helper -- this is a weighted round-robin

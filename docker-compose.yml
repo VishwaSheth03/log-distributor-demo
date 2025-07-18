@@ -1,6 +1,8 @@
 services:
   distributor:
-    build: ./distributor
+    build:
+      context: .
+      dockerfile: distributor/Dockerfile
     environment:
       - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.6},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.4}]
     ports:

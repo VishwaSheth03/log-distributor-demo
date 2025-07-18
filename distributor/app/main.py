@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
-import asyncio, os, json, signal, logging, httpx, time
+import asyncio, os, json, signal, logging, httpx, time, pathlib
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Gauge, generate_latest
 from .registry import AnalyzerRegistry, Analyzer
 
@@ -24,8 +25,8 @@ analyzers = [Analyzer(**x, effective_weight=x["weight"]) for x in raw_list]
 registry = AnalyzerRegistry(analyzers)
 
 # --------------- metrics ----------------
-PACKETS_RX = Counter("packets_received_total", "Packets received from emitters")
-PACKETS_TX = Counter("packets_forwarded_total", "Packets forwarded to analyzers", ["analyzer_id"])
+PACKETS_RX = Counter("packets_received_total", "Packets received from emitters") # tracks incoming packets to the distributor
+PACKETS_TX = Counter("packets_forwarded_total", "Packets forwarded to analyzers", ["analyzer_id"]) # tracks packets sent to analyzers
 QUEUE_SIZE = Gauge("queue_size", "Packets in the distributor queue")
 
 # --------------- HTTP client and queue ----------------
@@ -160,3 +161,5 @@ def _sigterm(*_):
     raise SystemExit()
 
 signal.signal(signal.SIGTERM, _sigterm)
+
+app.mount("/", StaticFiles(directory=os.getenv("STATIC_DIR", pathlib.Path(__file__).parent / "static"), html=True), name="static")

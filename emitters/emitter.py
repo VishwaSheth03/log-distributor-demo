@@ -6,7 +6,8 @@ from fastapi.responses import JSONResponse
 DISTRIBUTOR_URL = os.getenv("DISTRIBUTOR_URL", "http://distributor:8000/log-packet")
 EMITTER_ID = os.getenv("EMITTER_ID", "emitter-X")
 INITIAL_RPS = float(os.getenv("RATE_RPS", "1.0"))
-assert 0 < INITIAL_RPS <= 1000, "RATE_RPS must be between 0 and 1000"
+MAX_RPS = 10
+assert 0 < INITIAL_RPS <= MAX_RPS, "RATE_RPS must be between 0 and {MAX_RPS}"
 
 # --------------- state ----------------
 rate_rps = float = INITIAL_RPS
@@ -20,9 +21,9 @@ app = FastAPI(title="Emitter {EMITTER_ID}")
 async def set_rate(data: dict):
     """Set the rate limit for this emitter."""
     global rate_rps
-    rps = float(data.get("rps", INITIAL_RPS))
-    if rps <= 0 or rps > 1000:
-        raise ValueError("rps must be between 0 and 1000")
+    rps = data.get("rps", INITIAL_RPS)
+    if rps <= 0 or rps > MAX_RPS:
+        raise ValueError(f"rps must be between 0 and {MAX_RPS}")
     rate_rps = rps
     return {"rps": rate_rps}
 
@@ -40,7 +41,7 @@ async def resume():
     paused = False
     return {"paused": False}
 
-@app.post("/metrics")
+@app.get("/metrics")
 async def metrics():
     """Get current metrics."""
     return {

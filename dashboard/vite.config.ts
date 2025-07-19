@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       "/ws": "ws://localhost:8000",
       "/registry": "http://localhost:8000",
+      "/emitter": "http://localhost:8000",
       "/analyzer": "http://localhost:8000",
       "/metrics": "http://localhost:8000",
     },

@@ -4,7 +4,8 @@ services:
       context: .
       dockerfile: distributor/Dockerfile
     environment:
-      - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.6},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.4}]
+      - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.25},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.25},{"id":"a3","url":"http://analyzer3:9000/ingest","weight":0.25},{"id":"a4","url":"http://analyzer4:9000/ingest","weight":0.25}]
+      - EMITTERS_JSON=[{"emitter_id":"emit1","url":"http://emitter1:9100"},{"emitter_id":"emit2","url":"http://emitter2:9100"},{"emitter_id":"emit3","url":"http://emitter3:9100"},{"emitter_id":"emit4","url":"http://emitter4:9100"}]
     ports:
       - "8000:8000"
 
@@ -16,14 +17,21 @@ services:
     build: ./analyzers
     expose: ["9000"]
 
+  analyzer3:
+    build: ./analyzers
+    expose: ["9000"]
+
+  analyzer4:
+    build: ./analyzers
+    expose: ["9000"]
+
   emitter1:
     build: ./emitters
     environment:
       - DISTRIBUTOR_URL=http://distributor:8000/log-packet
       - EMITTER_ID=emit1
-      - RATE_RPS=4
-    ports:
-      - "9101:9100"      # control via localhost:9101
+      - RATE_RPS=1
+    expose: ["9100"]
     depends_on: [distributor]
 
   emitter2:
@@ -31,7 +39,24 @@ services:
     environment:
       - DISTRIBUTOR_URL=http://distributor:8000/log-packet
       - EMITTER_ID=emit2
-      - RATE_RPS=2
-    ports:
-      - "9102:9100"
+      - RATE_RPS=1
+    expose: ["9100"]
     depends_on: [distributor]
+
+  emitter3:
+      build: ./emitters
+      environment:
+        - DISTRIBUTOR_URL=http://distributor:8000/log-packet
+        - EMITTER_ID=emit3
+        - RATE_RPS=1
+      expose: ["9100"]
+      depends_on: [distributor]
+
+  emitter4:
+      build: ./emitters
+      environment:
+        - DISTRIBUTOR_URL=http://distributor:8000/log-packet
+        - EMITTER_ID=emit4
+        - RATE_RPS=1
+      expose: ["9100"]
+      depends_on: [distributor]

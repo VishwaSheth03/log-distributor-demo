@@ -14,15 +14,19 @@ logging.basicConfig(
 )
 
 # --------------- configuration ----------------
-# Expect env ANALYZERS_JSON like:
-# [{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.6},
-#  {"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.4}]
 an_json = os.getenv("ANALYZERS_JSON", "[]")
 if not an_json:
     raise RuntimeError("ANALYZERS_JSON environment variable is not set")
 raw_list = json.loads(an_json)
 analyzers = [Analyzer(**x, effective_weight=x["weight"]) for x in raw_list]
 registry = AnalyzerRegistry(analyzers)
+
+em_json = os.getenv("EMITTERS_JSON", "[]")
+if not em_json:
+    raise RuntimeError("EMITTERS_JSON environment variable is not set")
+raw_emitters = json.loads(em_json)
+EMITTER_METRICS: dict[str, dict] = {e["emitter_id"]: {"buffer_size": 0, "rate_rps": 0, "paused": True} for e in raw_emitters}
+emitters_index = {e["emitter_id"]: e for e in raw_emitters}
 
 # --------------- metrics ----------------
 PACKETS_RX = Counter("packets_received_total", "Packets received from emitters") # tracks incoming packets to the distributor
@@ -74,6 +78,39 @@ async def disable_analyzer(aid: str):
     await registry.toggle_admin(aid, False)
     return {"status": "disabled", "analyzer_id": aid}
 
+# ---------- emitter control proxy ----------
+@app.post("/emitter/{eid}/rate")
+async def proxy_rate(eid: str, body: dict):
+    e = emitters_index.get(eid)
+    if not e:
+        raise HTTPException(404, "unknown emitter")
+    await HTTP.post(f'{e["url"]}/rate', json=body)
+    return {"ok": True}
+
+@app.post("/emitter/{eid}/pause")
+async def proxy_pause(eid: str):
+    e = emitters_index.get(eid)
+    if not e:
+        raise HTTPException(404, "unknown emitter")
+    await HTTP.post(f'{e["url"]}/pause')
+    return {"ok": True}
+
+@app.post("/emitter/{eid}/resume")
+async def proxy_resume(eid: str):
+    e = emitters_index.get(eid)
+    if not e:
+        raise HTTPException(404, "unknown emitter")
+    await HTTP.post(f'{e["url"]}/resume')
+    return {"ok": True}
+
+@app.get("/emitter/{eid}/metrics")
+async def proxy_metrics(eid: str):
+    e = emitters_index.get(eid)
+    if not e:
+        raise HTTPException(404, "unknown emitter")
+    response = await HTTP.get(f'{e["url"]}/metrics')
+    return response.json()
+
 # ----------------- Prometheus Metrics ----------------
 @app.get("/metrics")
 def prom_metrics():
@@ -107,6 +144,15 @@ async def ws_metrics(ws: WebSocket):
                         "tx_packets": _tx_for(a.id),
                     }
                     for a in registry.analyzers
+                ],
+                "emitters": [
+                    {
+                        "emitter_id": e_id,
+                        "buffer_size": vals["buffer_size"],
+                        "rate_rps": vals["rate_rps"],
+                        "paused": vals["paused"],
+                    }
+                    for e_id, vals in EMITTER_METRICS.items()
                 ],
                 "packets_rx": PACKETS_RX._value.get(),
             }
@@ -150,9 +196,28 @@ async def health_probe():
             else:
                 await registry.mark_failure(a.id)
 
+async def poll_emitters():
+    while True:
+        await asyncio.sleep(1)
+        for e in raw_emitters:
+            try:
+                r = await HTTP.get(f'{e["url"]}/metrics')
+                m = r.json()
+                EMITTER_METRICS[e["emitter_id"]] = {
+                    "buffer_size": m["buffer_size"],
+                    "rate_rps": m["rate_rps"],
+                    "paused": m["paused"],
+                }
+                global emitters_index
+                emitters_index = {e["emitter_id"]: e for e in raw_emitters}
+            except Exception:
+                # unreachable emitter -> flag as paused & buffer unknown
+                EMITTER_METRICS[e["emitter_id"]] = {"buffer_size": None, "rate_rps": 0, "paused": True}
+
 @app.on_event("startup")
 async def _startup():
     asyncio.create_task(dispatcher())
+    asyncio.create_task(poll_emitters())
     asyncio.create_task(health_probe())
     logging.info("Log Distributor started")
 

@@ -104,6 +104,7 @@ class AnalyzerRegistry:
                 a.current_weight = 0.0
                 logging.info("Analyzer %s admin status changed to %s", aid, "ENABLED" if enable else "DISABLED")
                 self._normalize_effective_weights()
+                a.healthy = True if enable else False
     
     async def add(self, a: Analyzer):
         async with self._lock:

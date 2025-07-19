@@ -1,6 +1,8 @@
 import { Container, Grid, Typography } from "@mui/material";
 import useMetrics from "./hooks/useMetrics";
 import AnalyzerTable from "./components/AnalyzerTable";
+import EmitterTable from "./components/EmitterTable";
+import PacketsPerSec from "./components/PacketsPerSec";
 import BarChartLive from "./components/BarChartLive";
 
 function App() {
@@ -31,6 +33,10 @@ function App() {
                     <BarChartLive title="Distributor load"  series={queueSeries} />
                 </Grid>
                 <Grid>
+                    <PacketsPerSec />
+                </Grid>
+                <Grid>
+                    <EmitterTable list={metrics.emitters} />
                     <AnalyzerTable list={metrics.analyzers} />
                 </Grid>
             </Grid>

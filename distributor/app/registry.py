@@ -30,12 +30,6 @@ class AnalyzerRegistry:
     
     # normalizes effective weights based on current weights and total weight
     def _normalize_effective_weights(self):
-        """
-        Rule:
-        - If there are N eligible analyzers (healthy AND admin‑enabled),
-          split the combined lost weight *equally* among them.
-        - Sum of all effective weights must stay 1.0 (or 0 if none eligible).
-        """
         eligible = [a for a in self.analyzers if a.healthy and a.admin_enabled]
 
         if not eligible:
@@ -43,18 +37,20 @@ class AnalyzerRegistry:
                 a.effective_weight = 0.0
             return
 
-        # Step 1 – base weights from config (only for eligible ones)
-        base_total = sum(a.weight for a in eligible)
-        lost_weight = max(0.0, 1.0 - base_total)          # any gap because others are down
+        total = sum(a.weight for a in eligible)
 
-        # Step 2 – even share of lost weight
-        even_share = lost_weight / len(eligible)
-
-        for a in self.analyzers:
-            if a in eligible:
-                a.effective_weight = a.weight + even_share
-            else:
-                a.effective_weight = 0.0
+        if total == 0:          # all weights were 0
+            equalSplit = 1.0 / len(eligible)
+            for a in self.analyzers:
+                a.effective_weight = equalSplit if a in eligible else 0.0
+        elif total < 1.0:       # lost weight, therefore spread evenly
+            gap = (1.0 - total) / len(eligible)
+            for a in self.analyzers:
+                a.effective_weight = (a.weight + gap) if a in eligible else 0.0
+        else:                   # total > 1.0, therefore scale down proportionally
+            scale = 1.0 / total
+            for a in self.analyzers:
+                a.effective_weight = (a.weight * scale) if a in eligible else 0.0
 
 
     # Routing helper -- this is a weighted round-robin
@@ -110,6 +106,7 @@ class AnalyzerRegistry:
         async with self._lock:
             if a.id in [x.id for x in self.analyzers]:
                 raise ValueError(f"Analyzer with ID {a.id} already exists")
+            a.last_check = time.time() + 5 # grace period before first health check
             self.analyzers.append(a)
             logging.info("Added new analyzer %s", a.id)
             self._normalize_effective_weights()

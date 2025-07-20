@@ -13,7 +13,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S"
 )
 
-# --------------- configuration ----------------
+# --------------- Initialize Analyzers from docker-compose.yml ----------------
 an_json = os.getenv("ANALYZERS_JSON", "[]")
 if not an_json:
     raise RuntimeError("ANALYZERS_JSON environment variable is not set")
@@ -21,6 +21,7 @@ raw_list = json.loads(an_json)
 analyzers = [Analyzer(**x, effective_weight=x["weight"]) for x in raw_list]
 registry = AnalyzerRegistry(analyzers)
 
+# --------------- Initialize Emitters from docker-compose.yml ----------------
 em_json = os.getenv("EMITTERS_JSON", "[]")
 if not em_json:
     raise RuntimeError("EMITTERS_JSON environment variable is not set")
@@ -60,8 +61,26 @@ async def list_registry():
 
 @app.post("/registry/add")
 async def add_analyzer(data: dict):
-    await registry.add(**data, current_weight=0, effective_weight=data.get("weight", 1.0))
-    return {"added": data["id"]}
+    try:
+        weight = float(data.get("weight", 1.0))
+        analyzer = Analyzer(
+            id=data["id"],
+            url=data["url"],
+            weight=weight,
+            current_weight=0.0,
+            effective_weight=0.0,
+            healthy=True,
+            admin_enabled=True,
+        )
+    except KeyError as err:
+        raise HTTPException(400, f"missing field: {err}") from err
+
+    try:
+        await registry.add(analyzer)
+    except ValueError as err:
+        raise HTTPException(400, str(err)) from err
+
+    return {"added": analyzer.id}
 
 @app.delete("/registry/{aid}")
 async def remove_analyzer(aid: str):
@@ -169,7 +188,12 @@ async def dispatcher():
         packet = await QUEUE.get()
         target = await registry.choose()
         if not target:
-            logging.error("No healthy analyzers! Dropping packet: %s", packet)
+            logging.error("No healthy analyzers! Placing packet back %s in queue", packet)
+            if not QUEUE.full():
+                await QUEUE.put(packet)
+            else:
+                logging.error("Queue is full, dropping packet %s", packet)
+            await asyncio.sleep(1)  # wait before retrying
             continue
         try:
             response = await HTTP.post(target.url, json=packet)
@@ -186,6 +210,9 @@ async def health_probe():
     while True:
         await asyncio.sleep(2)
         for a in registry.analyzers:
+            now = time.time()
+            if now < a.last_check:
+                continue
             try:
                 response = await HTTP.get(a.url.replace("/ingest", "/health"))
                 ok = response.status_code == 200

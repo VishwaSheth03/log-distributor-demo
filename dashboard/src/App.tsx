@@ -11,7 +11,7 @@ function App() {
     if (!metrics) return <p>Waiting for data...</p>;
 
     const analyzerSeries = metrics.analyzers.map((a) => ({
-        name: a.id,
+        name: a.id + " " + a.effective_weight.toFixed(2),
         value: a.tx_packets,
     }));
 

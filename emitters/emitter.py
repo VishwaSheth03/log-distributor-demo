@@ -7,24 +7,28 @@ DISTRIBUTOR_URL = os.getenv("DISTRIBUTOR_URL", "http://distributor:8000/log-pack
 EMITTER_ID = os.getenv("EMITTER_ID", "emitter-X")
 INITIAL_RPS = float(os.getenv("RATE_RPS", "1.0"))
 MAX_RPS = 10
-assert 0 < INITIAL_RPS <= MAX_RPS, "RATE_RPS must be between 0 and {MAX_RPS}"
+assert 0 <= INITIAL_RPS <= MAX_RPS, "RATE_RPS must be between 0 and {MAX_RPS}"
 
 # --------------- state ----------------
 rate_rps = float = INITIAL_RPS
 paused = bool = False
 buffer: asyncio.Queue = asyncio.Queue(maxsize=5000)
 
-# --------------- FastAPI ----------------
 app = FastAPI(title="Emitter {EMITTER_ID}")
 
 @app.post("/rate")
 async def set_rate(data: dict):
     """Set the rate limit for this emitter."""
     global rate_rps
+    global paused
     rps = data.get("rps", INITIAL_RPS)
-    if rps <= 0 or rps > MAX_RPS:
+    if rps < 0 or rps > MAX_RPS:
         raise ValueError(f"rps must be between 0 and {MAX_RPS}")
     rate_rps = rps
+    if rps == 0:
+        paused = True
+    else:
+        paused = False
     return {"rps": rate_rps}
 
 @app.post("/pause")
@@ -54,6 +58,7 @@ async def metrics():
 # --------------- packet generation ----------------
 async def generator():
     while True:
+        # Generate a sample packet
         packet = {
             "packetId": str(uuid.uuid4()),
             "emitter": EMITTER_ID,
@@ -68,11 +73,16 @@ async def generator():
             ]
         }
         try:
-            await buffer.put(packet)
-            logging.info("Generated packet: %s", packet["packetId"])
+            if rate_rps > 0:
+                await buffer.put(packet)
+                logging.info("Generated packet: %s", packet["packetId"])
         except asyncio.QueueFull:
             _ = await buffer.get()
             await buffer.put(packet)  # retry putting the packet
+        
+        if rate_rps <= 0:
+            await asyncio.sleep(1)
+            continue
         await asyncio.sleep(1 / rate_rps)  # control the rate of generation
 
 async def sender():

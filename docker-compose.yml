@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: distributor/Dockerfile
     environment:
-      - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.25},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.25},{"id":"a3","url":"http://analyzer3:9000/ingest","weight":0.25},{"id":"a4","url":"http://analyzer4:9000/ingest","weight":0.25}]
+      - ANALYZERS_JSON=[{"id":"a1","url":"http://analyzer1:9000/ingest","weight":0.1},{"id":"a2","url":"http://analyzer2:9000/ingest","weight":0.4},{"id":"a3","url":"http://analyzer3:9000/ingest","weight":0.2},{"id":"a4","url":"http://analyzer4:9000/ingest","weight":0.3}]
       - EMITTERS_JSON=[{"emitter_id":"emit1","url":"http://emitter1:9100"},{"emitter_id":"emit2","url":"http://emitter2:9100"},{"emitter_id":"emit3","url":"http://emitter3:9100"},{"emitter_id":"emit4","url":"http://emitter4:9100"}]
     ports:
       - "8000:8000"

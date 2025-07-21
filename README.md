@@ -1,6 +1,6 @@
-# Log Distributor MVP Demo for Resolve AI (Submission by Vishwa Sheth)
+# Log Distributor MVP for Resolve AI (Submission by Vishwa Sheth)
 
-Hi there! This project is a self-contained demo of a high-throughput log pipline.
+Hi there 👋 This project is a self-contained demo of a high-throughput log pipline.
 The pipeline includes:
 * **Emitters** that generate a JSON log packet at up to 10 requests/second each.
 * A single **Distributor** that load-balances packets to **Analyzers** using *smooth weighted round-robin*, 
@@ -8,7 +8,12 @@ has live health probes, and dynamic weight-rebalance.
 * A **React dashboard** showing real-time metrics, lets you pause/resume emitters, enable/disable analyzers,
 and streams the routed packets.
 
-## Why Python?
+### **Quick Setup Guide Videos**
+If you want to get things running, I've created two quick videos to walk you through how to do that:
+- Installation and setup guide: [https://youtu.be/D99SrfNL6q4](https://youtu.be/D99SrfNL6q4)
+- How to add/remove Emitters and Analyzers: [https://youtu.be/9bGvrmHtGic](https://youtu.be/9bGvrmHtGic)
+
+## Why Python? 🐍
 
 You'll notice this project's backend is written entirely in Python. The emitter, distributor, and analyzer
 services are all containerized in Docker but the builds are from Python files. The reason for this is 
@@ -24,7 +29,7 @@ variables with this one line ensures thread safety.
 
 ---
 
-## Assumptions
+## Assumptions 💭
 
 Before starting this project, I made a couple important assumptions that weren't explicitly explained
 in the project description. I'll state them here for your reference.
@@ -43,7 +48,7 @@ will be sent to the same Analyzer once available.
 
 ---
 
-## Features
+## Features ⚙️
 
 Here are all the features that I have implemented in this project. Unless explicitly stated, all features
 are functional.
@@ -82,7 +87,7 @@ UI:
 
 ---
 
-## Distributor Design
+## Distributor Design 🏛️
 
 The Distributor is comprised of five components.
 
@@ -106,7 +111,7 @@ to pick analyzers.
 
 ---
 
-## Data Model
+## Data Model 📊
 
 Below is the data packet that each Emitter will send.
 
@@ -128,7 +133,7 @@ packet = {
 
 ---
 
-## API
+## API 🛜
 
 All routes are hosted on `http://localhost:8000` (Distributor container) and proxied to the Distributor, Emitters, and/or Analyzers as needed.
 
@@ -152,7 +157,7 @@ All routes are hosted on `http://localhost:8000` (Distributor container) and pro
 
 ---
 
-## Setup, Installation & Run
+## Setup, Installation & Run 🏃
 
 This is a fully self-contained project so setup and installation is all done in one easy step.
 
@@ -213,7 +218,7 @@ To run the UI in dev mode:
 
 ---
 
-## Improvements/Future work
+## Improvements/Future work 🧑‍💻
 
 This working demo is in a proof-of-concept stage where the components work. Most importantly, the 
 SWRR Distributor working is the core of this project. Even though there have been many more features

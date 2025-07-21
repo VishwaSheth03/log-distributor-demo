@@ -244,4 +244,5 @@ coming back online, network latency, spikes in requests.
 
 (Note that scalability tests may require a refactor to the current architecture, it's not feasible to write >10k
 Emitter and Analyzer components in the docker-compose.yml)
+
 ---

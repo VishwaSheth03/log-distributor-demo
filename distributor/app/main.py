@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 import asyncio, os, json, signal, logging, httpx, time, pathlib
+from collections import deque
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Gauge, generate_latest
 from .registry import AnalyzerRegistry, Analyzer
@@ -40,6 +41,9 @@ SYSTEM_PAUSED = False  # global flag to pause all emitters
 PACKETS_RX = Counter("packets_received_total", "Packets received from emitters") # tracks incoming packets to the distributor
 PACKETS_TX = Counter("packets_forwarded_total", "Packets forwarded to analyzers", ["analyzer_id"]) # tracks packets sent to analyzers
 QUEUE_SIZE = Gauge("queue_size", "Packets in the distributor queue")
+
+RECENT_LOGS: deque = deque(maxlen=500)     # keep last 500 packets
+log_clients: set[WebSocket] = set()        # connected UI sockets
 
 # --------------- HTTP client and queue ----------------
 # Async HTTP client shared by workers
@@ -215,6 +219,30 @@ async def ws_metrics(ws: WebSocket):
     finally:
         clients.discard(ws)
 
+@app.websocket("/ws/logs")
+async def ws_logs(ws: WebSocket):
+    await ws.accept()
+    # send backlog first
+    for item in list(RECENT_LOGS):
+        await ws.send_json(item)
+    log_clients.add(ws)
+    try:
+        while True:
+            await asyncio.sleep(3600)  # keep the connection alive
+    except WebSocketDisconnect:
+        pass
+    finally:
+        log_clients.discard(ws)
+
+# ---------------- Log WebSocket clients ----------------
+async def _broadcast_log(entry: dict):
+    for ws in list(log_clients):
+        try:
+            await ws.send_json(entry)
+        except Exception as exc:
+            logging.error("Failed to send log entry to client: %s", exc)
+            log_clients.discard(ws)
+
 # ---------------- Background worker ----------------
 async def dispatcher():
     """Pop packet -> pick analyzer -> forward"""
@@ -235,6 +263,8 @@ async def dispatcher():
             if response.status_code == 200:
                 PACKETS_TX.labels(target.id).inc()
                 await registry.mark_success(target.id)
+                entry = {"packet": packet, "analyzer": target.id}
+                RECENT_LOGS.append(entry); asyncio.create_task(_broadcast_log(entry))
                 if SYSTEM_PAUSED:
                     await _resume_all_emitters()
             else:

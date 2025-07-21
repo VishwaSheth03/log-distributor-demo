@@ -20,3 +20,18 @@ export interface MetricsPayload {
     emitters: Emitter[];
     packets_rx: number;
 }
+
+export interface LogEntry {
+  packet: {
+    packetId: string;
+    emitter: string;
+    messages: {
+      ts: string;
+      level: string;
+      service: string;
+      host: string;
+      message: string;
+    }[];
+  };
+  analyzer: string;
+}

@@ -4,6 +4,7 @@ import AnalyzerTable from "./components/AnalyzerTable";
 import EmitterTable from "./components/EmitterTable";
 import PacketsPerSec from "./components/PacketsPerSec";
 import BarChartLive from "./components/BarChartLive";
+import LogTable from "./components/LogTable";
 
 function App() {
     const metrics = useMetrics();
@@ -38,6 +39,9 @@ function App() {
                 <Grid>
                     <EmitterTable list={metrics.emitters} />
                     <AnalyzerTable list={metrics.analyzers} />
+                </Grid>
+                <Grid>
+                    <LogTable />
                 </Grid>
             </Grid>
         </Container>

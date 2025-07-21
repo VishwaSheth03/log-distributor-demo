@@ -26,8 +26,15 @@ em_json = os.getenv("EMITTERS_JSON", "[]")
 if not em_json:
     raise RuntimeError("EMITTERS_JSON environment variable is not set")
 raw_emitters = json.loads(em_json)
-EMITTER_METRICS: dict[str, dict] = {e["emitter_id"]: {"buffer_size": 0, "rate_rps": 0, "paused": True} for e in raw_emitters}
+EMITTER_METRICS: dict[str, dict] = {e["emitter_id"]: {
+        "buffer_size": 0, 
+        "rate_rps": 0, 
+        "paused": True,
+        "prev_rate": 1.0
+    } for e in raw_emitters}
 emitters_index = {e["emitter_id"]: e for e in raw_emitters}
+
+SYSTEM_PAUSED = False  # global flag to pause all emitters
 
 # --------------- metrics ----------------
 PACKETS_RX = Counter("packets_received_total", "Packets received from emitters") # tracks incoming packets to the distributor
@@ -38,7 +45,7 @@ QUEUE_SIZE = Gauge("queue_size", "Packets in the distributor queue")
 # Async HTTP client shared by workers
 HTTP = httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0))
 # In-memory queue
-QUEUE: asyncio.Queue = asyncio.Queue(maxsize=10_000)
+QUEUE: asyncio.Queue = asyncio.Queue(maxsize=50)
 
 # --------------- API endpoints ----------------
 @app.post("/log-packet")
@@ -130,6 +137,33 @@ async def proxy_metrics(eid: str):
     response = await HTTP.get(f'{e["url"]}/metrics')
     return response.json()
 
+async def _pause_all_emitters():
+    global SYSTEM_PAUSED
+    if SYSTEM_PAUSED:
+        return
+    SYSTEM_PAUSED = True
+    for eid, meta in EMITTER_METRICS.items():
+        try:
+            await HTTP.post(f'{emitters_index[eid]["url"]}/pause')
+            logging.warning("Back-pressure: paused emitter %s", eid)
+            meta["paused"] = True
+        except Exception as exc:
+            logging.error("Failed to pause emitter %s: %s", eid, exc)
+
+async def _resume_all_emitters():
+    global SYSTEM_PAUSED
+    if not SYSTEM_PAUSED:
+        return
+    SYSTEM_PAUSED = False
+    for eid, meta in EMITTER_METRICS.items():
+        try:
+            await HTTP.post(f'{emitters_index[eid]["url"]}/resume')
+            await HTTP.post(f'{emitters_index[eid]["url"]}/rate', json={"rate_rps": meta["prev_rate"]})
+            logging.info("Resumed %s at %.2f rps", eid, meta["prev_rate"])
+            meta["paused"] = False
+        except Exception as exc:
+            logging.error("Failed to resume emitter %s: %s", eid, exc)
+
 # ----------------- Prometheus Metrics ----------------
 @app.get("/metrics")
 def prom_metrics():
@@ -192,7 +226,8 @@ async def dispatcher():
             if not QUEUE.full():
                 await QUEUE.put(packet)
             else:
-                logging.error("Queue is full, dropping packet %s", packet)
+                logging.error("Queue is full and no analyzers available for %s", packet)
+                await _pause_all_emitters()
             await asyncio.sleep(1)  # wait before retrying
             continue
         try:
@@ -200,6 +235,8 @@ async def dispatcher():
             if response.status_code == 200:
                 PACKETS_TX.labels(target.id).inc()
                 await registry.mark_success(target.id)
+                if SYSTEM_PAUSED:
+                    await _resume_all_emitters()
             else:
                 await registry.mark_failure(target.id)
         except Exception as exc:
@@ -234,6 +271,7 @@ async def poll_emitters():
                     "buffer_size": m["buffer_size"],
                     "rate_rps": m["rate_rps"],
                     "paused": m["paused"],
+                    "prev_rate": m["rate_rps"] or EMITTER_METRICS[e["emitter_id"]]["prev_rate"],
                 }
                 global emitters_index
                 emitters_index = {e["emitter_id"]: e for e in raw_emitters}

@@ -118,6 +118,9 @@ analyzers go down or come up, and handles choosing which Analyzers to send packe
 **Dispatcher:** Pops packets from Queue and calls on Registry to choose Analyzer. Uses Smooth Weighted Round Robin (SWRR) 
 to pick analyzers.
 
+**Health Monitor:** Asynchronously pings each Analyzer at a rate of 0.5 Hz to see if they return a 200 on a probe request. If not, update
+registry to reflect that Analyzer is unhealthy.
+
 **Metrics/Logging WebSocket:** Allows pinging for component metrics and past 500 logs.
 
 ---

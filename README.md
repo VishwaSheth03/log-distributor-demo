@@ -13,6 +13,17 @@ If you want to get things running, I've created two quick videos to walk you thr
 - Installation and setup guide: [https://youtu.be/D99SrfNL6q4](https://youtu.be/D99SrfNL6q4)
 - How to add/remove Emitters and Analyzers: [https://youtu.be/9bGvrmHtGic](https://youtu.be/9bGvrmHtGic)
 
+## Table of Contents
+
+* [Why Python](#why-python-)
+* [Assumptions](#assumptions-)
+* [Features](#features-)
+* [Distributor Design](#distributor-design-️)
+* [Data Model](#data-model-)
+* [API](#api-)
+* [Setup, Install & Run](#setup-install--run-)
+* [Improvements/Future Work](#improvementsfuture-work-)
+
 ## Why Python? 🐍
 
 You'll notice this project's backend is written entirely in Python. The emitter, distributor, and analyzer
@@ -157,7 +168,7 @@ All routes are hosted on `http://localhost:8000` (Distributor container) and pro
 
 ---
 
-## Setup, Installation & Run 🏃
+## Setup, Install & Run 🏃
 
 This is a fully self-contained project so setup and installation is all done in one easy step.
 
@@ -218,7 +229,7 @@ To run the UI in dev mode:
 
 ---
 
-## Improvements/Future work 🧑‍💻
+## Improvements/Future Work 🧑‍💻
 
 This working demo is in a proof-of-concept stage where the components work. Most importantly, the 
 SWRR Distributor working is the core of this project. Even though there have been many more features

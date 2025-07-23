@@ -49,7 +49,7 @@ log_clients: set[WebSocket] = set()        # connected UI sockets
 # Async HTTP client shared by workers
 HTTP = httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0))
 # In-memory queue
-QUEUE: asyncio.Queue = asyncio.Queue(maxsize=50)
+QUEUE: asyncio.Queue = asyncio.Queue(maxsize=10_000)
 
 # --------------- API endpoints ----------------
 @app.post("/log-packet")
